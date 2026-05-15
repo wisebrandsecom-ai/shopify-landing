@@ -12,7 +12,9 @@ Hacer estas preguntas antes de empezar:
 2. **¿Hay nichos que quieras excluir?** (o "ninguno")
 3. **¿En qué país buscas?** (recomendado: US — luego UK, DE, FR, IT, ES)
 4. **¿Mínimo de ads activos?** (recomendado: 40)
-5. **¿Mínimo de días corriendo los ads?** (recomendado: 7)
+5. **¿Máximo de ads activos?** (recomendado: 200 — para excluir marcas muy grandes)
+6. **¿Mínimo de días corriendo los ads?** (recomendado: 7)
+7. **¿Máximo de días corriendo los ads?** (recomendado: 180 — para evitar productos saturados/viejos)
 6. **¿Cuántos productos quieres en el Excel?** (ej. 20, 50)
 7. **¿API o Chrome?**
    - *API* → rápido, requiere token en `~/Ad Library/.env`
@@ -23,7 +25,9 @@ PAIS          = US | UK | ES | MX | ...
 NICHO         = keyword(s) o "todos"
 EXCLUIR       = nichos excluidos (o vacío)
 MIN_ADS       = número mínimo de ads activos (default 40)
+MAX_ADS       = número máximo de ads activos (default 200)
 MIN_DAYS      = días mínimos corriendo (default 7)
+MAX_DAYS      = días máximos corriendo (default 180)
 MAX_RESULTS   = cuántos productos en el Excel
 METHOD        = api | chrome
 ```
@@ -177,9 +181,9 @@ params_count = {
     "fields": "id,ad_delivery_start_time",
     "limit": 500,
 }
-# Descartar si < MIN_ADS
+# Descartar si < MIN_ADS o > MAX_ADS
 # Días corriendo: today - min(ad_delivery_start_time)
-# Descartar si < MIN_DAYS
+# Descartar si < MIN_DAYS o > MAX_DAYS
 ```
 
 ### 5. Extraer PDP link
@@ -211,8 +215,8 @@ https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country={
 
 ### 4. Filtrar
 
-- Contar ads activos → descartar si < MIN_ADS
-- Calcular días desde inicio → descartar si < MIN_DAYS
+- Contar ads activos → descartar si < MIN_ADS o > MAX_ADS
+- Calcular días desde inicio → descartar si < MIN_DAYS o > MAX_DAYS
 
 ---
 
@@ -375,10 +379,12 @@ Keywords usadas:   {lista}
 
 Encontrados:       {N} productos
 Descartados:
-  - Por MIN_ADS:   {N}
-  - Por MIN_DAYS:  {N}
-  - No Shopify:    {N}
-  - No ecommerce:  {N}
+  - Por MIN_ADS:         {N}
+  - Por MAX_ADS (marca grande): {N}
+  - Por MIN_DAYS:        {N}
+  - Por MAX_DAYS (muy antiguo): {N}
+  - No Shopify:          {N}
+  - No ecommerce:        {N}
 
 En Excel:          {N} productos
   🟢 Winner:       {N}
