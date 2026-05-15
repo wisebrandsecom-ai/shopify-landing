@@ -1,6 +1,6 @@
 ---
 name: product-research
-description: Busca productos físicos de ecommerce con tracción en Meta Ad Library. Filtra por ads activos, días corriendo, plataforma (Shopify/Funnelish/GemPages/PageFly) y nivel de competencia. Exporta a Excel. Activar con /product-research.
+description: Busca productos físicos de ecommerce con tracción en Meta Ad Library. Evalúa según criterios de producto ganador. Exporta a Excel con scoring. Activar con /product-research.
 compatibility: claude-code-only
 ---
 
@@ -8,26 +8,22 @@ compatibility: claude-code-only
 
 Hacer estas preguntas antes de empezar:
 
-1. **¿En qué nicho o categoría quieres buscar?** (ej. suplementos masculinos, pet care, skincare) — o escribe "todos" para búsqueda abierta
-2. **¿Hay nichos que quieras excluir?** (ej. ropa, electrónica, servicios digitales) — o "ninguno"
-3. **¿En qué país buscas?** (recomendado: US)
+1. **¿En qué nicho o categoría quieres buscar?** (o "todos" para búsqueda abierta con keywords generales)
+2. **¿Hay nichos que quieras excluir?** (o "ninguno")
+3. **¿En qué país buscas?** (recomendado: US — luego UK, DE, FR, IT, ES)
 4. **¿Mínimo de ads activos?** (recomendado: 40)
 5. **¿Mínimo de días corriendo los ads?** (recomendado: 7)
-6. **¿Precio mínimo o máximo del producto?** — o "sin filtro"
-7. **¿Cuántos productos quieres en el Excel?** (ej. 20, 50)
-8. **¿API o Chrome?**
-   - *API* → rápido, masivo, requiere token en `~/Ad Library/.env`
+6. **¿Cuántos productos quieres en el Excel?** (ej. 20, 50)
+7. **¿API o Chrome?**
+   - *API* → rápido, requiere token en `~/Ad Library/.env`
    - *Chrome* → visual, sin token
 
-Guardar respuestas:
 ```
-PAIS          = US | ES | MX | ...
-NICHO         = keyword(s) de búsqueda
+PAIS          = US | UK | ES | MX | ...
+NICHO         = keyword(s) o "todos"
 EXCLUIR       = nichos excluidos (o vacío)
 MIN_ADS       = número mínimo de ads activos (default 40)
 MIN_DAYS      = días mínimos corriendo (default 7)
-PRECIO_MIN    = número o null
-PRECIO_MAX    = número o null
 MAX_RESULTS   = cuántos productos en el Excel
 METHOD        = api | chrome
 ```
@@ -36,13 +32,106 @@ METHOD        = api | chrome
 
 ## ⛔ REGLAS HARDCODED
 
-1. **SOLO ECOMMERCE FÍSICO** — Excluir automáticamente: servicios, SaaS, apps, agencias, infoproductos, cursos, coaching, productos digitales. Si hay duda → excluir.
+1. **SOLO ECOMMERCE FÍSICO** — Excluir: servicios, SaaS, apps, agencias, infoproductos, cursos, coaching, digitales. Si hay duda → excluir.
 
-2. **SOLO PLATAFORMAS PERMITIDAS** — Solo incluir productos cuya landing usa: Shopify, Funnelish, GemPages o PageFly. Verificar siempre DESPUÉS de pasar todos los demás filtros (último paso).
+2. **SOLO SHOPIFY** — Solo incluir tiendas Shopify. Detectar visitando el checkout: si muestra el checkout nativo de Shopify (con logo "Shop" o URL `/checkouts/`) → válido. Funnelish, GemPages, PageFly son válidos solo si corren sobre Shopify. Tiendas con checkout completamente custom → excluir.
 
-3. **PDP LINK = destino real del ad** — No el perfil del anunciante. Seguir el CTA del ad y capturar la URL de aterrizaje.
+3. **EXCLUIR MARCAS GRANDES** — Si la tienda tiene Shopify Plus (checkout customizado con elementos extras, URL de marca propia en checkout) → probablemente marca establecida, no dropshipping → excluir.
 
-4. **NO INVENTAR DATOS** — Si no puedes verificar un campo, dejar en blanco. Nunca estimar sin base.
+4. **PDP LINK = destino real del ad** — Seguir el CTA del ad. Idealmente debe llevar a una product page, no a una home. Si lleva a una home → anotar pero marcar como "Home landing".
+
+5. **NO INVENTAR DATOS** — Si no puedes verificar un campo, dejar en blanco.
+
+---
+
+## Keywords de búsqueda
+
+Usar estas keywords para buscar en Meta Ad Library. Combinarlas entre sí y con el NICHO del usuario. Probar en el idioma del país objetivo (traducir con IA, no traductor literal).
+
+**Urgency / Offer:**
+```
+60/90/30 day guarantee · get yours here · order now
+sale ends soon/today/tomorrow/at midnight · limited stock
+buy 1 get 1/2 free · risk free · limited stock/limited time
+today only · last chance
+```
+
+**Social proof / Trust:**
+```
+happy customers · clinically proven · doctor recommended
+why doctors · life changing · game changer · instant results
+```
+
+**Pain / Problem:**
+```
+chronic pain · embarrassing · struggling with · stop suffering
+tired of · stop hiding · no more hiding · say goodbye to
+the truth about · bed · ed · confidence
+```
+
+**Outcome / Desire:**
+```
+regain your · unstoppable · youthful glow · discreet
+for men · for women · natural ingredients
+```
+
+**Animal:**
+```
+pet · dog · cat
+```
+
+**Keyword framework** (combinar categorías para el nicho específico):
+- Product keyword + Problem keyword (ej. "crema anti arrugas" + "arrugas")
+- Mechanism keyword + Outcome keyword (ej. "ácido hialurónico" + "piel joven")
+- Pain keyword sola (ej. "chronic pain", "embarrassing")
+
+Generar 5-8 combinaciones de keywords por búsqueda. Si el nicho es específico, añadir keywords del nicho en el idioma local.
+
+---
+
+## Criterios de producto ganador
+
+Estos criterios se aplican para evaluar y puntuar cada producto encontrado.
+
+### Criterios eliminatorios (si falla alguno → descartar automáticamente)
+
+- **Competidores activos escalando** → verificado por MIN_ADS activos
+- **Producto físico y evergreen** → no estacional, no tendencia puntual
+- **Solo ecommerce** → no servicios ni digitales
+- **Tienda Shopify** → verificado en checkout
+
+### Criterios de scoring (0-10 por producto)
+
+Evaluar cada criterio y asignar puntos. El total define el Winner Score.
+
+**1. Soluciona problema o inseguridad grave** ← MÁS IMPORTANTE (0-4 puntos)
+- 4pts: problema grave, recurrente, emocional (dolor, salud, inseguridad visible)
+- 2pts: problema moderado, mejora algo pero no urgente
+- 0pts: producto "bonito" o de tendencia sin problema real detrás
+- Señales positivas: copy del ad usa palabras de dolor ("tired of", "stop hiding", "chronic", "embarrassing")
+- Señales negativas: copy puramente aspiracional sin problema concreto, producto decorativo
+
+**2. TAM grande** (0-2 puntos)
+- 2pts: mercado masivo (salud general, belleza, mascotas, fitness, hombres, mujeres)
+- 1pt: mercado medio (un deporte concreto pero popular, un problema común)
+- 0pts: nicho muy específico (golf en un solo país, coleccionismo, hobby muy pequeño)
+
+**3. Valor percibido alto** (0-2 puntos)
+- 2pts: el producto parece valer más de lo que cuesta, aspecto premium, electrónico o tecnológico
+- 1pt: valor percibido medio, producto funcional pero no impresionante visualmente
+- 0pts: producto simple, parece barato a primera vista (trocito de plástico, parche)
+
+**4. Fácil de entender** (0-2 puntos)
+- 2pts: con solo ver el creativo o la PDP está claro qué hace, cómo funciona y para quién es
+- 1pt: necesita algo de explicación pero no mucho
+- 0pts: requiere proceso de educación del cliente, concepto complejo
+
+### Winner Score total (0-10)
+```
+8-10 → 🟢 Producto ganador — testear prioritariamente
+5-7  → 🟡 Interesante — hacer más research antes de decidir
+0-4  → 🔴 No cumple criterios — descartar o guardar solo como inspiración
+```
 
 ---
 
@@ -56,15 +145,11 @@ Leer `~/Ad Library/.env`. Si no existe:
 > META_ACCESS_TOKEN=tu_token_aqui
 > ```"
 
-### 2. Construir keywords de búsqueda
+### 2. Generar keywords
 
-A partir de NICHO, generar 3-5 keywords relacionadas para maximizar cobertura:
-```
-NICHO = "suplementos masculinos"
-KEYWORDS = ["testosterone supplement", "male enhancement", "men vitality", "ED supplement", "capsaicin men"]
-```
+A partir de NICHO + lista de keywords, generar 5-8 combinaciones relevantes.
 
-### 3. Buscar ads en Meta Ad Library API
+### 3. Buscar en Meta Ad Library API
 
 Para cada keyword:
 ```python
@@ -74,16 +159,15 @@ params = {
     "ad_active_status": "ACTIVE",
     "search_terms": keyword,
     "ad_type": "ALL",
-    "fields": "id,page_id,page_name,ad_delivery_start_time,ad_creative_link_captions,ad_creative_link_descriptions,ad_creative_link_titles,ad_snapshot_url",
+    "fields": "id,page_id,page_name,ad_delivery_start_time,ad_creative_link_captions,ad_creative_link_titles,ad_snapshot_url",
     "limit": 500,
 }
 ```
 
-Paginar con cursor `after`. Deduplicar por `page_id`.
+Paginar con `after`. Deduplicar por `page_id`.
 
-### 4. Filtrar por MIN_ADS activos
+### 4. Filtrar por MIN_ADS y MIN_DAYS
 
-Para cada página encontrada, contar sus ads activos:
 ```python
 params_count = {
     "access_token": TOKEN,
@@ -93,53 +177,52 @@ params_count = {
     "fields": "id,ad_delivery_start_time",
     "limit": 500,
 }
+# Descartar si < MIN_ADS
+# Días corriendo: today - min(ad_delivery_start_time)
+# Descartar si < MIN_DAYS
 ```
-- Contar ads activos totales → descartar si < MIN_ADS
-- Calcular días corriendo: `(today - min(ad_delivery_start_time)).days` → descartar si < MIN_DAYS
 
 ### 5. Extraer PDP link
 
-Del campo `ad_creative_link_captions` o `ad_snapshot_url`, extraer la URL de destino del ad.
-Si no disponible vía API → marcar para visita Chrome en paso de verificación.
+Del campo `ad_creative_link_captions` o siguiendo el ad snapshot URL.
 
 ---
 
 ## Camino B — Chrome MCP
 
-### 1. Construir URL de búsqueda
+### 1. Navegar a Meta Ad Library
 
 ```
-https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country={PAIS}&q={KEYWORD}&media_type=all
+https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country={PAIS}&q={KEYWORD}
 ```
 
-### 2. Navegar y extraer
+### 2. Aplicar filtros
 
-- `navigate` a la URL
-- Aplicar filtro "Ordenar por: Más recientes" para ver ads activos primero
-- Scroll con `window.scrollBy(0, 1000)` para cargar más resultados
-- Para cada ad card extraer:
-  - Nombre de la página
-  - Fecha de inicio del ad
-  - Link "Ver detalles del anuncio" → extraer URL de destino del CTA
+- Anuncios activos: siempre activado
+- Fecha de inicio: desde hace MIN_DAYS días (para garantizar que llevan corriendo)
+- Ir variando entre vídeo, imagen, todos — para ver más resultados
 
-### 3. Filtrar
+### 3. Extraer resultados
 
-- Contar ads activos por página → descartar si < MIN_ADS
+- Scroll con `window.scrollBy(0, 1000)` para cargar más
+- Para cada ad: nombre de página, fecha inicio, link del ad
+- Si el ad tiene "N anuncios usan este contenido" → señal positiva (está siendo escalado, duplicado)
+- Seguir el CTA del ad para obtener la PDP link
+
+### 4. Filtrar
+
+- Contar ads activos → descartar si < MIN_ADS
 - Calcular días desde inicio → descartar si < MIN_DAYS
 
 ---
 
-## Filtro de plataforma (ÚLTIMO PASO — aplicar solo a los que pasaron todos los filtros)
+## Verificación Shopify (ÚLTIMO PASO)
 
-Para cada producto que pasa los filtros anteriores, visitar la PDP link con Claude in Chrome:
+Solo para productos que pasaron todos los filtros anteriores.
 
-```
-navigate(url: PDP_LINK)
-```
+Visitar PDP link con Chrome y ejecutar:
 
-Inspeccionar con `javascript_tool`:
 ```javascript
-// Shopify
 const isShopify = !!(
   window.Shopify ||
   document.querySelector('link[href*="cdn.shopify.com"]') ||
@@ -147,64 +230,32 @@ const isShopify = !!(
   document.querySelector('meta[name="shopify-checkout-api-token"]')
 );
 
-// GemPages
-const isGemPages = !!(
-  document.querySelector('[class*="gempages"]') ||
-  document.querySelector('script[src*="gempages"]') ||
-  window.__gempages__
+const isShopifyPlus = !!(
+  document.querySelector('.shopify-plus') ||
+  (window.Shopify && window.Shopify.shop && document.querySelector('[data-shopify-plus]'))
 );
 
-// PageFly
-const isPageFly = !!(
-  document.querySelector('[class*="pagefly"]') ||
-  document.querySelector('script[src*="pagefly"]')
-);
-
-// Funnelish
-const isFunnelish = !!(
-  window.Funnelish ||
-  document.querySelector('script[src*="funnelish"]') ||
-  document.querySelector('[data-funnelish]')
-);
-
-// Checkout URL check (Shopify fallback)
-const checkoutLinks = Array.from(document.querySelectorAll('a[href*="/checkout"]'));
-const hasShopifyCheckout = checkoutLinks.some(l => l.href.includes('.myshopify.com') || l.href.includes('/checkout'));
-
-return JSON.stringify({ isShopify, isGemPages, isPageFly, isFunnelish, hasShopifyCheckout });
+return JSON.stringify({ isShopify, isShopifyPlus });
 ```
 
-- Si ninguna plataforma detectada → descarta el producto
-- Si detecta Shopify, GemPages, PageFly o Funnelish → incluir, anotar plataforma
-
-**También verificar que es ecommerce físico:**
-- ¿Hay botón de "Add to Cart" / "Buy Now"?
-- ¿Hay precio visible?
-- ¿Es un producto tangible (no servicio, no digital)?
-- Si hay duda → excluir
+Si no detectado via JS → añadir al carrito y ver el checkout:
+- URL `/checkouts/` + logo "Shop" o elementos nativos Shopify → ✅ válido
+- Checkout completamente custom sin elementos Shopify → ❌ excluir
+- Shopify Plus (checkout con muchas customizaciones extra, marca propia) → ❌ excluir (marca grande)
 
 ---
 
-## Nivel de competencia (escala 1-10)
+## Competition Score (1-10)
 
-Para cada producto incluido, calcular score de competencia:
+Contar marcas distintas encontradas anunciando ese mismo producto o similares con las mismas keywords:
 
 ```
-MARCAS_ACTIVAS = número de páginas distintas encontradas anunciando ese producto o similar
-                 (usando las mismas keywords de búsqueda)
-
-SCORE:
-  1-2  → < 5 marcas activas       (nicho muy poco explorado)
-  3-4  → 5-15 marcas activas      (oportunidad con algo de tracción)
-  5-6  → 16-40 marcas activas     (mercado establecido, competencia media)
-  7-8  → 41-100 marcas activas    (muy competido)
-  9-10 → > 100 marcas activas     (saturado)
+1-2  → < 5 marcas    🟢 Muy poco explorado
+3-4  → 5-15 marcas   🟢 Oportunidad con tracción
+5-6  → 16-40 marcas  🟡 Mercado establecido
+7-8  → 41-100 marcas 🔴 Muy competido
+9-10 → > 100 marcas  🔴 Saturado
 ```
-
-Añadir columna `Competition Score` con número + etiqueta:
-- 1-3: 🟢 Baja
-- 4-6: 🟡 Media
-- 7-10: 🔴 Alta
 
 ---
 
@@ -214,23 +265,26 @@ Guardar en `~/Downloads/product-research_{NICHO}_{PAIS}_{fecha}.xlsx`
 
 Columnas:
 ```
-A: #
-B: Competitor / Product Name    ← nombre de la marca anunciante
-C: Product Description          ← qué es el producto (extraído del ad copy o PDP)
-D: PDP Link                     ← URL de aterrizaje del ad
-E: Ads Library Link             ← https://www.facebook.com/ads/library/?view_all_page_id={page_id}
-F: Platform                     ← Shopify / GemPages / PageFly / Funnelish
-G: Active Ads                   ← número de ads activos
-H: Days Running                 ← días desde el primer ad activo
-I: Date Found                   ← fecha de hoy
-J: Keywords Used                ← keyword(s) que encontraron este producto
-K: Competition Score            ← número 1-10 + emoji
+A:  #
+B:  Competitor / Product Name
+C:  Product Description
+D:  PDP Link               ← hyperlink "Ver PDP"
+E:  Ads Library Link       ← hyperlink "Ver Ads"
+F:  Platform               ← Shopify / Shopify Plus
+G:  Active Ads
+H:  Days Running
+I:  Date Found
+J:  Keywords Used
+K:  Competition Score      ← 1-10 + emoji
+L:  Winner Score           ← 0-10 + emoji (🟢/🟡/🔴)
+M:  Score Breakdown        ← Problema(x/4) TAM(x/2) Valor(x/2) Fácil(x/2)
 ```
 
 ```python
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from datetime import date
+import os
 
 wb = openpyxl.Workbook()
 ws = wb.active
@@ -238,7 +292,8 @@ ws.title = "Product Research"
 
 headers = ["#", "Competitor / Product Name", "Product Description", "PDP Link",
            "Ads Library Link", "Platform", "Active Ads", "Days Running",
-           "Date Found", "Keywords Used", "Competition Score"]
+           "Date Found", "Keywords Used", "Competition Score",
+           "Winner Score", "Score Breakdown"]
 
 header_fill = PatternFill("solid", fgColor="1877F2")
 header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -252,41 +307,42 @@ for col, h in enumerate(headers, 1):
 fill_par   = PatternFill("solid", fgColor="EBF2FF")
 fill_impar = PatternFill("solid", fgColor="FFFFFF")
 
-for i, product in enumerate(products, 1):
+for i, p in enumerate(products, 1):
     row = i + 1
     fill = fill_par if i % 2 == 0 else fill_impar
-
     ws.cell(row=row, column=1,  value=i).fill = fill
-    ws.cell(row=row, column=2,  value=product["name"]).fill = fill
-    ws.cell(row=row, column=3,  value=product["description"]).fill = fill
+    ws.cell(row=row, column=2,  value=p["name"]).fill = fill
+    ws.cell(row=row, column=3,  value=p["description"]).fill = fill
 
     pdp = ws.cell(row=row, column=4, value="Ver PDP")
-    pdp.hyperlink = product["pdp_link"]
+    pdp.hyperlink = p["pdp_link"]
     pdp.font = Font(color="1877F2", underline="single")
     pdp.fill = fill
 
     lib = ws.cell(row=row, column=5, value="Ver Ads")
-    lib.hyperlink = product["ads_library_link"]
+    lib.hyperlink = p["ads_library_link"]
     lib.font = Font(color="1877F2", underline="single")
     lib.fill = fill
 
-    ws.cell(row=row, column=6,  value=product["platform"]).fill = fill
-    ws.cell(row=row, column=7,  value=product["active_ads"]).fill = fill
-    ws.cell(row=row, column=8,  value=product["days_running"]).fill = fill
+    ws.cell(row=row, column=6,  value=p["platform"]).fill = fill
+    ws.cell(row=row, column=7,  value=p["active_ads"]).fill = fill
+    ws.cell(row=row, column=8,  value=p["days_running"]).fill = fill
     ws.cell(row=row, column=9,  value=str(date.today())).fill = fill
-    ws.cell(row=row, column=10, value=product["keywords"]).fill = fill
-    ws.cell(row=row, column=11, value=product["competition_score"]).fill = fill
+    ws.cell(row=row, column=10, value=p["keywords"]).fill = fill
+    ws.cell(row=row, column=11, value=p["competition_score"]).fill = fill
+    ws.cell(row=row, column=12, value=p["winner_score"]).fill = fill
+    ws.cell(row=row, column=13, value=p["score_breakdown"]).fill = fill
 
 thin = Side(style="thin", color="CCCCCC")
 border = Border(left=thin, right=thin, top=thin, bottom=thin)
-for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=11):
+for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=13):
     for cell in row:
         cell.border = border
         if not cell.hyperlink:
             cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-col_widths = [5, 30, 40, 12, 12, 14, 12, 14, 14, 25, 18]
-cols = ["A","B","C","D","E","F","G","H","I","J","K"]
+col_widths = [5, 28, 35, 10, 10, 14, 12, 14, 14, 22, 18, 14, 30]
+cols = ["A","B","C","D","E","F","G","H","I","J","K","L","M"]
 for col, width in zip(cols, col_widths):
     ws.column_dimensions[col].width = width
 
@@ -296,8 +352,8 @@ for r in range(2, ws.max_row + 1):
 
 ws.freeze_panes = "A2"
 
-output = f"~/Downloads/product-research_{NICHO}_{PAIS}_{date.today()}.xlsx"
-wb.save(os.path.expanduser(output))
+output = os.path.expanduser(f"~/Downloads/product-research_{NICHO}_{PAIS}_{date.today()}.xlsx")
+wb.save(output)
 ```
 
 Abrir automáticamente:
@@ -309,9 +365,26 @@ open ~/Downloads/product-research_{NICHO}_{PAIS}_{fecha}.xlsx
 
 ## Confirmación final
 
-Imprimir:
-- N productos encontrados
-- N descartados por plataforma
-- N descartados por MIN_ADS
-- N descartados por MIN_DAYS
-- Ruta del Excel
+```
+========================================
+  PRODUCT RESEARCH COMPLETE
+========================================
+País:              {PAIS}
+Nicho:             {NICHO}
+Keywords usadas:   {lista}
+
+Encontrados:       {N} productos
+Descartados:
+  - Por MIN_ADS:   {N}
+  - Por MIN_DAYS:  {N}
+  - No Shopify:    {N}
+  - No ecommerce:  {N}
+
+En Excel:          {N} productos
+  🟢 Winner:       {N}
+  🟡 Interesante:  {N}
+  🔴 Descartar:    {N}
+
+Archivo: ~/Downloads/product-research_{NICHO}_{PAIS}_{fecha}.xlsx
+========================================
+```
