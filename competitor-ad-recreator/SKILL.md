@@ -29,6 +29,26 @@ Adapts visual structure and copy to the user's product, branding, and benefits.
 
 ---
 
+## ⛔ EXECUTION ORDER — NEVER SKIP STEPS
+
+```
+BLOCK 0 → BLOCK 1 (HARD GATE) → BLOCK 2 (show copy, wait approval) → BLOCK 3 (pre-flight) → BLOCK 4 → BLOCK 5
+```
+
+**BLOCK 1 IS A HARD GATE.** You cannot call `generate_image` until:
+1. You have Read every reference image visually
+2. You have printed the full inventory table
+3. The table has one row per image with ALL columns filled
+
+If you skip Block 1 and go straight to generation → that is a skill violation.
+Print "BLOCK 1 COMPLETE — N images analyzed" before moving to Block 2.
+
+**If user says "skip confirmation" or "no need to approve copy":**
+You may skip the copy approval in Block 2.
+You may NOT skip Block 1 visual analysis. Block 1 is always mandatory.
+
+---
+
 ## Required inputs
 
 ```
@@ -115,9 +135,19 @@ Show summary to user. Confirm before Block 1.
 
 ---
 
-### BLOCK 1 — Visual analysis (HARD GATE)
+### BLOCK 1 — Visual analysis (HARD GATE — MANDATORY, NO EXCEPTIONS)
 
-Read each ad image visually (from local file or downloaded from Meta). Print this table before any generation:
+**Read EVERY image visually before writing any prompt.**
+Do not rely on filenames. Do not assume content. Open each image with the Read tool.
+
+For each reference image, write a one-paragraph SCENE ANALYSIS describing exactly what you see:
+- What is the main subject?
+- Where is the product placed?
+- What text overlays are visible (copy them verbatim)?
+- What is the background, lighting, mood?
+- What type of ad is this (STATIC product-visible / NATIVE no-product)?
+
+Then print the full inventory table:
 
 ```
 | # | Filename | **Type** | Layout | Subject | Background | Text overlays (source) | Aspect | Mood |
@@ -161,9 +191,11 @@ AD 1 — [filename]
 
 Read `references/higgsfield-prompting.md` before this block.
 
-For each ad, fill this strict template:
+**Before filling the template, paste your SCENE ANALYSIS from Block 1 for this ad.**
+Then fill the strict template:
 
 ```
+SCENE_ANALYSIS:         [paste your Block 1 description here]
 REFERENCE_FILE:         [filename]
 LAYOUT:                 [exact layout: split / centered / top-bottom / etc.]
 SUBJECT:                [what is the main visual subject and where]
