@@ -113,7 +113,6 @@ Natural window light. Candid, authentic feel. UGC aesthetic.
 
 When building the image prompt, use this mapping:
 
-| From Gemini extraction | Maps to prompt element |
 |------------------------|------------------------|
 | `visual_description` | Base composition and setting |
 | `mood` | Mood and emotional tone |
