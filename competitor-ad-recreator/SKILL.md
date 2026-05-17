@@ -1,294 +1,326 @@
-# Competitor Ad Recreator — Static Ads
+---
+name: competitor-ad-recreator
+description: Recreates competitor static ads using Higgsfield nano_banana_2. Analyzes reference images, adapts copy, generates images, saves to desktop. Activate with /competitor-ad-recreator.
+compatibility: claude-code-only
+---
 
-Recreates competitor static ads using a local folder of reference images + optional copy file.
-Adapts visual structure and copy to the user's product, branding, and benefits.
+## ⛔ HARDCODED RULES — Read before anything else
+
+1. **NO PLACEHOLDERS** — Every prompt field must be filled with specific details from the reference image. Forbidden: "clean background", "nice composition", "minimal style". Describe exactly what you see.
+
+2. **BLOCK 1 IS MANDATORY — NO EXCEPTIONS** — You cannot call `generate_image` until Block 1 inventory table is printed in full. If the user says "skip confirmation" or "continue without stopping" — Block 2 copy approval may be skipped, Block 1 NEVER.
+
+3. **ONE IMAGE = ONE GENERATION** — N ad images = N generate_image calls. No combining, no skipping.
+
+4. **VERIFY FILES AFTER WRITING** — After every file write, immediately run `ls -la OUTPUT_FOLDER` to confirm the file exists and size > 0. If not found, retry before continuing.
+
+5. **MODEL VERIFICATION FIRST** — Before any generate_image call, confirm available Higgsfield models with `models_explore`. Never assume model names.
+
+6. **MAX 2 RETRIES PER IMAGE** — If an image fails or doesn't match after 2 attempts, stop, show both attempts, and report to user. Do not loop indefinitely.
+
+7. **LOCALE-AWARE COPY** — Translate to OUTPUT_LANGUAGE localized for OUTPUT_LOCALE. No em-dashes (—), no en-dashes (–). Preserve all emojis, bullets, and format from the original. Preserve ¿? opening punctuation in Spanish.
+
+8. **BRAND SUBSTITUTION IS MANDATORY** — Apply substitutions defined in BLOCK 2 before writing any copy. Run the checklist after every single copy block.
+
+9. **STATE FILE** — Create and maintain `estado.md` in OUTPUT_FOLDER throughout the run. Update after every completed step so context loss can be recovered.
+
+10. **CHROME ONLY FOR SCRAPING** — Use Claude in Chrome MCP to access Meta Ad Library. Never use Gemini API, web_fetch, or any other method. Meta blocks all non-browser requests.
 
 ---
 
-## ⛔ HARDCODED RULES
-
-1. **READ EVERY IMAGE** — Never skip an image in ADS_FOLDER. Read each one visually before writing any prompt. Print an inventory table first.
-2. **NO PLACEHOLDERS** — Every prompt field must be filled. Forbidden: "clean background", "nice composition", "beautiful product". Be specific.
-3. **PRINT-BEFORE-ACT** — Print the Pre-flight Checklist before any generate_image call.
-4. **ONE IMAGE = ONE GENERATION** — N ad images in folder = N Higgsfield generations. No combining, no skipping.
-5. **FAIL LOUD** — If a generation doesn't match the reference structure, print a DIVERGENCE REPORT and stop. Do not upload bad results.
-6. **BRAND IS USER'S, STRUCTURE IS COMPETITOR'S**
-
-7. **LOCALE-AWARE COPY** — Copy must feel native to OUTPUT_LOCALE, not like a literal translation.
-   - Use vocabulary natural to that country (e.g. ES/MX "coche" vs "carro", "vosotros" never in MX)
-   - Adapt idioms, expressions, and urgency language to local register
-   - Prices, units, and references must match local conventions
-   - Tone stays the same as the reference ad — do not add or remove formality
-   - Never exaggerate regional accent or slang — write how a native speaker would, not a caricature
-   - When OUTPUT_LOCALE is not provided: infer from BRAND_NAME context or default to neutral Spanish — Borrow the visual layout. Replace everything identity-related with the user's brand.
-
-7. **NATIVE vs STATIC DETECTION** — Classify each ad image before generating:
-   - **STATIC**: product is visible in the image → `nano_banana_2` + PRODUCT_MEDIA_ID
-   - **NATIVE**: product NOT visible, looks like real person/UGC/lifestyle → `soul_2` (no Soul ID needed)
-   Detect automatically from visual analysis in Block 1. If ambiguous → default to STATIC.
-
----
-
-## ⛔ EXECUTION ORDER — NEVER SKIP STEPS
+## ⛔ EXECUTION ORDER — NEVER SKIP
 
 ```
-BLOCK 0 → BLOCK 1 (HARD GATE) → BLOCK 2 (show copy, wait approval) → BLOCK 3 (pre-flight) → BLOCK 4 → BLOCK 5
+BLOCK 0 → models_explore → BLOCK 1 (HARD GATE) → BLOCK 2 → BLOCK 3 (pre-flight) → BLOCK 4 → BLOCK 5
 ```
 
-**BLOCK 1 IS A HARD GATE.** You cannot call `generate_image` until:
-1. You have Read every reference image visually
-2. You have printed the full inventory table
-3. The table has one row per image with ALL columns filled
-
-If you skip Block 1 and go straight to generation → that is a skill violation.
-Print "BLOCK 1 COMPLETE — N images analyzed" before moving to Block 2.
-
-**If user says "skip confirmation" or "no need to approve copy":**
-You may skip the copy approval in Block 2.
-You may NOT skip Block 1 visual analysis. Block 1 is always mandatory.
+Print `BLOCK N COMPLETE` after each block before moving to the next.
 
 ---
 
 ## Required inputs
 
 ```
-AD_SOURCE         meta_library_url OR local_folder
-                  - meta_library_url: URL of advertiser's Meta Ad Library profile
-                  - local_folder: /Users/.../Desktop/my-ads-folder
-                    Each subfolder: one image + optional copy.txt
+AD_SOURCE         One or more Meta Ad Library URLs, or local folder path
+                  Add "- Nativo" after any URL for native/UGC ads (soul_2)
+                  URLs without tag → STATIC (nano_banana_2)
 
-PRODUCT_PHOTO     [attached PNG — clean packshot, white/transparent bg]
-PRODUCT_DOC       [attached PDF — product benefits, tone, features]
-AVATAR_DOC        [attached PDF — only required for Copy Mode C]
-COPY_MODE         A / B / C  (see below)
+PRODUCT_PHOTO     Path to clean packshot PNG (white/transparent bg, no props)
+PRODUCT_DOC       Path to product PDF (benefits, tone, features, brand)
+AVATAR_DOC        Path to avatar PDF (only required for COPY_MODE C)
+COPY_MODE         A / B / C
 OUTPUT_LANGUAGE   es / en / fr / etc.
-OUTPUT_LOCALE     [country code — e.g. MX, ES, CO, AR, US]
-                  Determines regional vocabulary, expressions, and cultural references.
-                  Required when OUTPUT_LANGUAGE = es
-OUTPUT_FOLDER     [local path — e.g. /Users/.../Desktop/Batch 001 Output] or pt.
-BRAND_NAME        [brand name as it appears on packaging]
-BRAND_COLORS      [primary hex — e.g. #8B2C2C]
+OUTPUT_LOCALE     MX / ES / CO / AR / US / etc.
+BRAND_NAME        Your brand name
+BRAND_COLORS      Primary hex (e.g. #8B1A1A)
+OUTPUT_FOLDER     Local desktop path (e.g. /Users/.../Desktop/Claude Ads)
 ```
-
-If any input is missing → ask before starting. Do not assume.
 
 ---
 
 ## Copy modes
 
-### Mode A — 1:1 Copy
-Reproduce the competitor's copy as-is.
-- Keep same structure, emotional angle, CTA style
-- Translate to OUTPUT_LANGUAGE if different, localized to OUTPUT_LOCALE
-- Only swap brand/product name where necessary
+**Mode A — 1:1:** Reproduce competitor copy verbatim. Translate to OUTPUT_LANGUAGE/LOCALE if different. Preserve every structural element, emoji, bullet, paragraph break.
 
-### Mode B — Translate + adapt
-Light adaptation:
-- Translate to OUTPUT_LANGUAGE, localized to OUTPUT_LOCALE
-- Replace competitor brand/product with user's product
-- Keep creative strategy and emotional angle intact
-- Adapt idioms and expressions to feel native in OUTPUT_LOCALE
-- Draw benefits from `brand_profile` where substitution is needed
+**Mode B — Translate + adapt:** Translate to OUTPUT_LANGUAGE/LOCALE. Replace competitor brand/product with user's. Keep creative strategy, hook type, emotional angle, paragraph structure.
 
-### Mode C — Research rewrite
-Full rewrite using competitor structure as inspiration only.
-- **Requires**: AVATAR_DOC
-- Borrow the emotional hook and format from the competitor
-- Write entirely new copy rooted in user's avatar + product
-- Lead with avatar's massive desire or main pain point
-- Match awareness level from AVATAR_DOC
+**Mode C — Research rewrite:** Full rewrite using competitor structure as skeleton. Requires AVATAR_DOC. Every claim comes from PRODUCT_DOC + avatar research.
 
 ---
 
-## Execution blocks
+## BLOCK 0 — Setup
 
-### BLOCK 0 — Read inputs + inventory
+**0a. Verify models**
+```
+Call models_explore to confirm available Higgsfield models.
+Store confirmed model names: STATIC_MODEL and NATIVE_MODEL.
+Do not assume "nano_banana_2" or "soul_2" — verify first.
+```
 
-1. Upload PRODUCT_PHOTO to Higgsfield → store as `PRODUCT_MEDIA_ID`
-2. Read PRODUCT_DOC → extract `brand_profile`:
-   - Core offer (1 sentence)
-   - Top 5 benefits (flag most visual ones)
-   - Tone of voice
-   - Visual identity cues (colors, style)
-   - Target audience
-3. If COPY_MODE = C → read AVATAR_DOC → extract `avatar_profile`:
-   - Massive desire
-   - Top 3-5 pain points
-   - Awareness level
-   - Demographics
-   - Language patterns (exact phrases)
-4. Read ads based on AD_SOURCE:
+**0b. Upload product photo**
+```bash
+# Use PUT with -T flag (not --data-binary, which Sentinel blocks)
+curl -X PUT -H "Content-Type: image/png" -T "PRODUCT_PHOTO" 'HIGGSFIELD_UPLOAD_URL'
+```
+Store as `PRODUCT_MEDIA_ID`.
 
-   **If AD_SOURCE = meta_library_url:**
-   Use Claude in Chrome (Claude_in_Chrome MCP) — no Gemini, no web_fetch, no API keys.
-   Read `references/meta-library-scraper.md` and execute it fully.
-   Result: `ads[]` array with image URL + copy text per ad.
+**0c. Read PRODUCT_DOC**
+Extract `brand_profile`:
+- Core offer (1 sentence)
+- Top 5 benefits (flag most visual)
+- Tone of voice
+- Visual identity (colors, packaging style)
+- Target audience
+- Proof points (stats, reviews, certifications)
 
-   **If AD_SOURCE = local_folder:**
-   List subfolders. For each:
-   - Read the image file → `ad[n].image`
-   - Read copy.txt if present → `ad[n].copy` (null if missing)
-   
-   Print inventory: N ads found = N generations planned.
+**0d. If COPY_MODE C → read AVATAR_DOC**
+Extract `avatar_profile`: massive desire, top pain points, awareness level, language patterns.
 
-Show summary to user. Confirm before Block 1.
+**0e. Create state file**
+```
+Write OUTPUT_FOLDER/estado.md:
+Total ads: N
+Model static: [confirmed]
+Model native: [confirmed]
+PRODUCT_MEDIA_ID: [id]
+
+ad_01: scrape ⬜ | copy ⬜ | image ⬜ | file ⬜
+ad_02: scrape ⬜ | copy ⬜ | image ⬜ | file ⬜
+...
+```
+Verify with `ls -la OUTPUT_FOLDER`.
+
+Print: `BLOCK 0 COMPLETE`
 
 ---
 
-### BLOCK 1 — Visual analysis (HARD GATE — MANDATORY, NO EXCEPTIONS)
+## BLOCK 1 — Visual analysis (HARD GATE)
 
-**Read EVERY image visually before writing any prompt.**
-Do not rely on filenames. Do not assume content. Open each image with the Read tool.
+**For each ad in AD_SOURCE:**
 
-For each reference image, write a one-paragraph SCENE ANALYSIS describing exactly what you see:
-- What is the main subject?
-- Where is the product placed?
-- What text overlays are visible (copy them verbatim)?
-- What is the background, lighting, mood?
-- What type of ad is this (STATIC product-visible / NATIVE no-product)?
+1. Navigate to the Meta Ad Library URL with Chrome MCP
+2. Read the ad visually — screenshot if needed
+3. Extract: headline, primary text (full — do not truncate), description, CTA
+4. Write a SCENE ANALYSIS paragraph describing exactly what you see in the image:
+   - Subject (what/who is shown)
+   - Product placement (visible? where?)
+   - Background (exact color, material, texture)
+   - Text overlays visible in the image (copy verbatim)
+   - Composition, lighting, mood
+5. Classify: STATIC (product visible → STATIC_MODEL) or NATIVE (no product → NATIVE_MODEL)
 
-Then print the full inventory table:
+Print the full inventory table — one row per ad:
 
 ```
-| # | Filename | **Type** | Layout | Subject | Background | Text overlays (source) | Aspect | Mood |
-|---|----------|----------|--------|---------|------------|------------------------|--------|------|
-| 1 | ad1.jpg  | **STATIC** | split | product left, text right | white gradient | "LOSE 10KG IN 30 DAYS" top | 1:1 | urgent |
-| 2 | ad2.jpg  | **NATIVE** | full-bleed | woman in kitchen, no product | warm home | none | 4:5 | warm |
-
-Type detection rule:
-- STATIC = product packaging/bottle/bag visible anywhere in the image
-- NATIVE = no product visible, looks like organic social content (person, lifestyle, UGC)
+| # | URL/File | Type | Subject | Background | Text overlays (source) | Aspect | Mood |
+|---|----------|------|---------|------------|------------------------|--------|------|
+| 1 | ...id=123 | STATIC | hand holding red pouch, chilies | dark crimson | "Rock-Hard Again" top | 1:1 | urgent |
 ```
 
-Count total: `N images found → N generations planned`
+Update estado.md: `ad_01: scrape ✅ | copy ⬜ | image ⬜ | file ⬜`
 
-Each ad has its own copy.txt in its subfolder — use `ad[n].copy` directly. No matching needed.
+**Only after table is complete:**
+Print: `BLOCK 1 COMPLETE — N ads analyzed. N STATIC, N NATIVE.`
 
 ---
 
-### BLOCK 2 — Copy generation
+## BLOCK 2 — Copy adaptation
 
-For each ad image, generate adapted copy using COPY_MODE.
+**Brand substitution rules (apply to EVERY copy block):**
 
-Also produce two fields:
-- `TEXT_OVERLAYS_SOURCE` — verbatim text visible in the reference image
-- `TEXT_OVERLAYS_OUTPUT_LANG` — same text in OUTPUT_LANGUAGE (goes in Higgsfield prompt)
-
-**Show all adapted copy to user before Block 3. User confirms or edits.**
+Before writing any copy, load these substitutions from PRODUCT_DOC and the prompt inputs. Apply them to every single copy block without exception:
 
 ```
-AD 1 — [filename]
-  Headline:      [adapted]
-  Primary text:  [adapted]
-  CTA:           [adapted]
-  Overlay (source lang):  [verbatim from image]
-  Overlay (OUTPUT_LANG):  [translated]
+COMPETITOR_BRAND → BRAND_NAME
+COMPETITOR_PRODUCT → [user's product name from PRODUCT_DOC]
+Any drug brand (Viagra/Sildenafil/etc.) → [local equivalent if specified]
+"ED" / "E.D." → full term (e.g. "disfunción eréctil") — never abbreviate
 ```
+
+For each ad, generate adapted copy following COPY_MODE.
+
+**Preservation checklist (run after EVERY copy block):**
+```
+[ ] Same number of paragraphs as source
+[ ] All emojis preserved
+[ ] All bullets preserved (➡️ 💪 ✅ etc.)
+[ ] ¿? opening punctuation in Spanish where needed
+[ ] No em-dashes (—) or en-dashes (–) anywhere
+[ ] Brand substitutions applied
+[ ] OUTPUT_LOCALE vocabulary (not neutral textbook translation)
+[ ] Full primary text — not truncated (even if 800+ words)
+```
+
+**Output format for each ad:**
+```
+AD [N] — [filename/URL]
+Type: STATIC / NATIVE
+Headline: [adapted]
+Primary text: [full adapted — every paragraph]
+Description: [adapted]
+CTA: [adapted]
+Text overlays (source lang): [verbatim from image]
+Text overlays (OUTPUT_LANG): [translated]
+```
+
+If user did not say to skip approval → show all copy and wait for confirmation before Block 3.
+If user said to skip → proceed directly to Block 3.
+
+Update estado.md after each: `ad_01: scrape ✅ | copy ✅ | image ⬜ | file ⬜`
+
+Print: `BLOCK 2 COMPLETE`
 
 ---
 
-### BLOCK 3 — Image prompt construction
+## BLOCK 3 — Image prompt construction + pre-flight
 
-Read `references/higgsfield-prompting.md` before this block.
-
-**Before filling the template, paste your SCENE ANALYSIS from Block 1 for this ad.**
-Then fill the strict template:
+For each ad, fill this strict template:
 
 ```
-SCENE_ANALYSIS:         [paste your Block 1 description here]
-REFERENCE_FILE:         [filename]
-LAYOUT:                 [exact layout: split / centered / top-bottom / etc.]
-SUBJECT:                [what is the main visual subject and where]
-BACKGROUND:             [exact color + material — "warm cream linen" not "clean background"]
-LIGHTING:               [direction, quality, color temp]
-PROPS_EXACT:            [every visual element: list them all]
-TEXT_OVERLAYS:          [TEXT_OVERLAYS_OUTPUT_LANG content, position, style]
-BRAND_TREATMENT:        ["product packaging shows '[BRAND_NAME]', colors [BRAND_COLORS]"]
-MOOD:                   [urgent / aspirational / clinical / warm / bold / etc.]
-ASPECT_RATIO:           [match reference]
+SCENE_ANALYSIS:    [paste Block 1 scene analysis for this ad]
+REFERENCE_FILE:    [URL or filename]
+TYPE:              STATIC / NATIVE
+LAYOUT:            [exact arrangement]
+SUBJECT:           [main visual subject and position]
+BACKGROUND:        [exact color + material — "warm cream linen" not "clean background"]
+LIGHTING:          [direction, quality, color temp]
+PROPS_EXACT:       [every prop — list them all]
+TEXT_OVERLAYS:     [TEXT in OUTPUT_LANG, position, style]
+BRAND_TREATMENT:   ["product shows BRAND_NAME branding, colors BRAND_COLORS"]
+MOOD:              [urgent / clinical / warm / bold / etc.]
+ASPECT_RATIO:      [match reference]
 ```
 
-Forbidden in final prompt: "beautiful", "amazing", "nice", "clean background" alone, "minimal composition" alone.
-
-**Pre-flight checklist (print before calling generate_image):**
-
+**Pre-flight checklist (print before EACH generate_image call):**
 ```
 PRE-FLIGHT [ad N]:
-[ ] Inventory table printed
-[ ] generations_planned = N == image_files_in_folder = N
-[ ] TEXT_OVERLAYS_OUTPUT_LANG verified in OUTPUT_LANGUAGE (zero source-language words)
-[ ] PRODUCT_MEDIA_ID will be passed in medias[]
+[ ] Block 1 inventory table complete
+[ ] Scene analysis pasted in prompt
 [ ] All prompt fields filled — no placeholder phrases
-[ ] BRAND_COLORS in prompt
+[ ] TEXT_OVERLAYS in OUTPUT_LANGUAGE only (zero source-language words)
+[ ] PRODUCT_MEDIA_ID: [id] confirmed in medias[]
+[ ] Model confirmed via models_explore: [model name]
+[ ] Brand substitutions applied in overlays
+[ ] Aspect ratio matches reference
 ```
+
+Print: `BLOCK 3 COMPLETE`
 
 ---
 
-### BLOCK 4 — Generate in Higgsfield
+## BLOCK 4 — Generate in Higgsfield
 
-Model depends on ad type from Block 1:
-
-**STATIC ads** → `nano_banana_2`
+**STATIC ads:**
 ```
-Model: nano_banana_2
+Model: STATIC_MODEL (confirmed in Block 0)
 Medias: [{ value: PRODUCT_MEDIA_ID, role: "image" }]
 Prompt: [from Block 3 template]
 Aspect ratio: [from Block 3]
 ```
 
-**NATIVE ads** → `soul_2`
+**NATIVE ads:**
 ```
-Model: soul_2
-Prompt: [UGC-style prompt from references/higgsfield-prompting.md Soul 2.0 template]
+Model: NATIVE_MODEL (confirmed in Block 0)
+Prompt: [UGC-style scene description — real person, phone camera feel]
 Aspect ratio: [from Block 3]
 ```
-No Soul ID needed. `soul_2` generates realistic people from a text description.
-Describe the person in the prompt: age, appearance, clothing, setting, action, emotional tone.
 
-After each generation, print verification block:
-
+**After each generation completes:**
 ```
-VERIFICATION [filename]:
-  Layout matches reference?         [YES/NO]
+VERIFICATION [ad N]:
+  Layout matches reference?         [YES/NO — 1 line]
   Brand/product visible?            [YES/NO]
-  Overlays in OUTPUT_LANGUAGE?      [YES/NO — list any wrong-language words]
-  → PASS (upload) | FAIL (retry once) | DIVERGENCE (stop + report)
+  Overlays in OUTPUT_LANGUAGE?      [YES/NO]
+  No AI artifacts?                  [YES/NO]
+  → PASS / FAIL (retry once) / DIVERGENCE (stop + report)
 ```
 
-If FAIL → adjust only the failing element, retry once.
-If second attempt fails → print DIVERGENCE REPORT, wait for user.
+**Retry rule:** If FAIL → refine prompt, retry once. If second attempt fails → print:
+```
+DIVERGENCE [ad N]:
+  Expected: [what reference shows]
+  Generated attempt 1: [URL]
+  Generated attempt 2: [URL]
+  Stopping. User decision needed.
+```
+Do not continue to other ads until user responds.
+
+Update estado.md: `ad_01: scrape ✅ | copy ✅ | image ✅ | file ⬜`
 
 ---
 
-### BLOCK 5 — Save to desktop
+## BLOCK 5 — Save to desktop
+
+For each completed ad:
 
 ```bash
-mkdir -p "OUTPUT_FOLDER"
-curl -L "HIGGSFIELD_CDN_URL_1" -o "OUTPUT_FOLDER/anuncio_01.png"
-curl -L "HIGGSFIELD_CDN_URL_2" -o "OUTPUT_FOLDER/anuncio_02.png"
+curl -L "HIGGSFIELD_CDN_URL" -o "OUTPUT_FOLDER/anuncio_0N.png"
 ```
 
-Write one `copy_anuncio_0N.txt` per ad. N ads = N files. Never combine.
-Format: see `references/copy-format.md`.
+Verify immediately:
+```bash
+ls -la "OUTPUT_FOLDER/anuncio_0N.png"
+# Must show file size > 100KB
+```
+
+If file missing or < 100KB → retry curl before continuing.
+
+Write copy file:
+```bash
+# OUTPUT_FOLDER/copy_anuncio_0N.txt
+# Format: same labels as source (Primary text / Headline / Description / CTA)
+# OUTPUT_LANGUAGE only. No source-language words. No metadata.
+```
+
+Verify copy file:
+```bash
+ls -la "OUTPUT_FOLDER/copy_anuncio_0N.txt"
+```
+
+Update estado.md: `ad_01: scrape ✅ | copy ✅ | image ✅ | file ✅`
+
+---
+
+## Final output
 
 ```
 OUTPUT_FOLDER/
-  anuncio_01.png
+  anuncio_01.png       ← full resolution, no compression
   copy_anuncio_01.txt
   anuncio_02.png
   copy_anuncio_02.txt
+  ...
+  estado.md            ← final status of all ads
 ```
 
-Print OUTPUT_FOLDER path and finish. No Drive. No upload. Done.
----
-
-## Error handling
-
-| Error | Action |
-|-------|--------|
-| Image unreadable by Read tool | Ask user to re-export as PNG/JPG |
-| copies.txt not found | Skip — generate copy from image analysis only |
-| Higgsfield fails twice | Skip ad, note in copies.txt, continue |
-| PRODUCT_MEDIA_ID fails | Stop Block 4, ask user to re-attach product photo |
-
-| Avatar PDF missing in Mode C | Stop Block 2, request before continuing |
+Print completion summary:
+```
+========================================
+  BATCH COMPLETE
+========================================
+Total ads:     N
+Completed:     N
+Failed:        N (see estado.md for details)
+Output folder: OUTPUT_FOLDER
+========================================
+```
