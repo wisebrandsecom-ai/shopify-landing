@@ -119,9 +119,11 @@ Print: `BLOCK 0 COMPLETE`
 **For each ad in AD_SOURCE:**
 
 1. Navigate to the Meta Ad Library URL with Chrome MCP
-2. Read the ad visually — screenshot if needed
-3. Extract: headline, primary text (full — do not truncate), description, CTA
-4. Write a SCENE ANALYSIS paragraph describing exactly what you see in the image:
+2. Click "Ver detalles del anuncio" — this opens the full ad detail panel
+3. Extract headline, primary text (FULL — scroll to read all, click "Ver más" if truncated), description, CTA
+4. Take a screenshot of the ad creative (the actual image/visual)
+5. Download the creative image with curl to OUTPUT_FOLDER/ref_0N.jpg
+6. Write a SCENE ANALYSIS paragraph describing exactly what you see in the image:
    - Subject (what/who is shown)
    - Product placement (visible? where?)
    - Background (exact color, material, texture)
@@ -218,8 +220,10 @@ PRE-FLIGHT [ad N]:
 [ ] Scene analysis pasted in prompt
 [ ] All prompt fields filled — no placeholder phrases
 [ ] TEXT_OVERLAYS in OUTPUT_LANGUAGE only (zero source-language words)
-[ ] PRODUCT_MEDIA_ID: [id] confirmed in medias[]
-[ ] Model confirmed via models_explore: [model name]
+[ ] PRODUCT_MEDIA_ID: [id] confirmed in medias[] (STATIC only)
+[ ] REF_IMAGE_ID: [id] — competitor creative uploaded to Higgsfield
+[ ] Model: nano_banana_2 for STATIC, soul_2 for NATIVE
+[ ] NATIVE ads do NOT use PRODUCT_MEDIA_ID
 [ ] Brand substitutions applied in overlays
 [ ] Aspect ratio matches reference
 ```
@@ -230,20 +234,28 @@ Print: `BLOCK 3 COMPLETE`
 
 ## BLOCK 4 — Generate in Higgsfield
 
-**STATIC ads:**
+**STATIC ads (product visible in reference):**
 ```
-Model: STATIC_MODEL (confirmed in Block 0)
-Medias: [{ value: PRODUCT_MEDIA_ID, role: "image" }]
+Model: nano_banana_2
+Medias:
+  - { value: PRODUCT_MEDIA_ID, role: "image" }        ← user's product
+  - { value: REF_IMAGE_ID, role: "style_reference" }  ← competitor creative as style ref
 Prompt: [from Block 3 template]
 Aspect ratio: [from Block 3]
 ```
 
-**NATIVE ads:**
+Upload ref_0N.jpg to Higgsfield first → get REF_IMAGE_ID → pass both in medias[].
+
+**NATIVE ads (no product visible — UGC/person-led):**
 ```
-Model: NATIVE_MODEL (confirmed in Block 0)
-Prompt: [UGC-style scene description — real person, phone camera feel]
+Model: soul_2
+Medias:
+  - { value: REF_IMAGE_ID, role: "style_reference" }  ← competitor creative as style ref
+Prompt: [UGC-style scene, real person, phone camera feel — based on scene analysis]
 Aspect ratio: [from Block 3]
 ```
+
+NATIVE ads never use PRODUCT_MEDIA_ID — product is not shown in native ads.
 
 **After each generation completes:**
 ```
